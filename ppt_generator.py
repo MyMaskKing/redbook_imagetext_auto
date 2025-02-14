@@ -7,7 +7,7 @@ import time
 from pptx.util import Pt
 import traceback
 from copy import deepcopy
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageTk
 import io
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 import win32com.client
@@ -15,67 +15,457 @@ import pythoncom
 from spire.presentation import Presentation
 import comtypes.client
 
+class ModernButton(tk.Button):
+    def __init__(self, master, **kwargs):
+        # 提取自定义颜色参数
+        self.start_color = kwargs.pop('start_color', '#FF4D6D') if 'start_color' in kwargs else '#FF4D6D'
+        self.end_color = kwargs.pop('end_color', '#FF8FA3') if 'end_color' in kwargs else '#FF8FA3'
+        
+        # 设置基本配置
+        kwargs.update({
+            'background': self.start_color,
+            'foreground': 'white',
+            'font': ('Microsoft YaHei UI', 10),
+            'borderwidth': 0,
+            'activebackground': self.end_color,
+            'activeforeground': 'white',
+            'padx': 15,
+            'pady': 8,
+            'cursor': 'hand2',
+            'relief': 'flat'
+        })
+        
+        super().__init__(master, **kwargs)
+        
+        # 圆角效果（使用Canvas实现）
+        self.canvas = tk.Canvas(self, width=20, height=20, bg=self.start_color, 
+                              highlightthickness=0)
+        self.canvas.create_arc(0, 0, 20, 20, start=90, extent=90, fill=self.start_color)
+        
+        self.bind('<Enter>', self.on_enter)
+        self.bind('<Leave>', self.on_leave)
+
+    def on_enter(self, e):
+        self.config(background=self.end_color)
+        self.canvas.config(bg=self.end_color)
+
+    def on_leave(self, e):
+        self.config(background=self.start_color)
+        self.canvas.config(bg=self.start_color)
+
 class PPTGeneratorApp:
     def __init__(self, root):
         self.root = root
         self.root.title("小红书图文批量制作工具")
         
+        # 设置窗口大小和位置
+        window_width = 800
+        window_height = 600
+        screen_width = root.winfo_screenwidth()
+        screen_height = root.winfo_screenheight()
+        center_x = int(screen_width/2 - window_width/2)
+        center_y = int(screen_height/2 - window_height/2)
+        self.root.geometry(f'{window_width}x{window_height}+{center_x}+{center_y}')
+        
+        # 设置小红书风格主题（浅粉色背景）
+        self.root.configure(bg='#FFF0F5')
+        
+        # 创建主容器
+        main_container = tk.Frame(root, bg='#FFF0F5')
+        main_container.pack(fill=tk.BOTH, expand=True)
+        
+        # 创建画布和滚动条
+        self.canvas = tk.Canvas(main_container, bg='#FFF0F5', highlightthickness=0)
+        self.scrollbar = ttk.Scrollbar(main_container, orient="vertical", command=self.canvas.yview)
+        
         # 创建主框架
-        self.main_frame = ttk.Frame(root, padding="10")
-        self.main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        self.main_frame = tk.Frame(self.canvas, bg='#FFF0F5')
         
-        # PPT模板文件路径
-        ttk.Label(self.main_frame, text="PPT模板文件路径:").grid(row=0, column=0, sticky=tk.W)
-        self.ppt_path = tk.StringVar()
-        self.ppt_entry = ttk.Entry(self.main_frame, textvariable=self.ppt_path, width=40)
-        self.ppt_entry.grid(row=0, column=1, padx=5)
-        ttk.Button(self.main_frame, text="选择", command=self.select_ppt).grid(row=0, column=2)
+        # 配置画布滚动区域
+        self.canvas_frame = self.canvas.create_window((0, 0), window=self.main_frame, anchor="nw")
         
-        # Excel文件路径
-        ttk.Label(self.main_frame, text="Excel数据文件路径:").grid(row=1, column=0, sticky=tk.W)
-        self.excel_path = tk.StringVar()
-        self.excel_entry = ttk.Entry(self.main_frame, textvariable=self.excel_path, width=40)
-        self.excel_entry.grid(row=1, column=1, padx=5)
-        ttk.Button(self.main_frame, text="选择", command=self.select_excel).grid(row=1, column=2)
+        # 绑定画布和滚动条
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
         
-        # 保存路径
-        ttk.Label(self.main_frame, text="保存文件路径:").grid(row=2, column=0, sticky=tk.W)
-        self.save_path = tk.StringVar()
-        self.save_entry = ttk.Entry(self.main_frame, textvariable=self.save_path, width=40)
-        self.save_entry.grid(row=2, column=1, padx=5)
-        ttk.Button(self.main_frame, text="选择", command=self.select_save_path).grid(row=2, column=2)
+        # 布局画布和滚动条
+        self.canvas.pack(side="left", fill="both", expand=True, padx=(20, 0))  # 添加左边距
+        self.scrollbar.pack(side="right", fill="y")
         
-        # 单选按钮组
-        self.radio_frame = ttk.LabelFrame(self.main_frame, text="特定页设置", padding="5")
-        self.radio_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
+        # 绑定事件
+        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+        self.main_frame.bind("<Configure>", self._on_frame_configure)
+        self.canvas.bind("<Configure>", self._on_canvas_configure)
         
-        self.radio_var1 = tk.StringVar(value="option1")
-        self.radio_var2 = tk.StringVar(value="option1")
+        # 标题（使用小红书logo颜色）
+        title_label = tk.Label(
+            self.main_frame,
+            text="小红书图文批量制作工具",
+            font=('Microsoft YaHei UI', 24, 'bold'),
+            fg='#FF2442',
+            bg='#FFF0F5'
+        )
+        title_label.pack(pady=(0, 30))
         
-        ttk.Radiobutton(self.radio_frame, text="标题+正文", variable=self.radio_var1, value="option1").grid(row=0, column=0)
-        ttk.Radiobutton(self.radio_frame, text="只有正文", variable=self.radio_var1, value="option2").grid(row=0, column=1)
+        # 文件选择区域
+        self.create_file_frame()
         
-        ttk.Radiobutton(self.radio_frame, text="所有页面一一对应", variable=self.radio_var2, value="option1").grid(row=1, column=0)
-        ttk.Radiobutton(self.radio_frame, text="所有页面统一一个标题", variable=self.radio_var2, value="option2").grid(row=1, column=1)
+        # 设置区域
+        self.create_settings_frame()
         
-        # 添加图片设置框
-        self.scale_frame = ttk.LabelFrame(self.main_frame, text="图片设置", padding="5")
-        self.scale_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
+        # 添加尺寸设置区域
+        self.create_scale_frame()
         
-        # 图片宽度设置
-        ttk.Label(self.scale_frame, text="图片宽度:").grid(row=0, column=0, sticky=tk.W)
-        self.width_var = tk.StringVar(value="2000")  # 默认宽度2000
-        self.width_entry = ttk.Entry(self.scale_frame, textvariable=self.width_var, width=10)
-        self.width_entry.grid(row=0, column=1, padx=5)
+        # 进度条区域
+        self.create_progress_frame()
         
-        # 图片高度设置
-        ttk.Label(self.scale_frame, text="图片高度:").grid(row=0, column=2, sticky=tk.W, padx=(20,0))
-        self.height_var = tk.StringVar(value="1500")  # 默认高度1500
-        self.height_entry = ttk.Entry(self.scale_frame, textvariable=self.height_var, width=10)
-        self.height_entry.grid(row=0, column=3, padx=5)
+        # WPS提示
+        self.create_wps_notice()
         
         # 生成按钮
-        ttk.Button(self.main_frame, text="开始批量生成", command=self.generate_ppt).grid(row=5, column=0, columnspan=3, pady=10)
+        self.create_generate_button()
+
+    def _on_mousewheel(self, event):
+        """处理鼠标滚轮事件"""
+        self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+
+    def _on_frame_configure(self, event=None):
+        """更新画布的滚动区域"""
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+    def _on_canvas_configure(self, event):
+        """当画布大小改变时调整框架宽度"""
+        # 设置框架宽度以匹配画布
+        self.canvas.itemconfig(self.canvas_frame, width=event.width)
+
+    def create_file_frame(self):
+        file_frame = tk.LabelFrame(
+            self.main_frame,
+            text="文件选择",
+            font=('Microsoft YaHei UI', 12, 'bold'),
+            fg='#FF2442',
+            bg='#FFFFFF',
+            padx=20,
+            pady=20,
+            relief='flat',
+        )
+        file_frame.pack(fill=tk.X, pady=(0, 20), padx=20)
+
+        # 配置列的权重
+        file_frame.grid_columnconfigure(1, weight=1)  # 让输入框列自动扩展
+
+        # 为每个选择按钮设置不同的渐变色
+        self.ppt_path = self.create_file_entry(
+            file_frame, "PPT模板:", self.select_ppt, 0,
+            start_color='#FF4D6D', end_color='#FF8FA3'
+        )
+        
+        self.excel_path = self.create_file_entry(
+            file_frame, "Excel文件:", self.select_excel, 1,
+            start_color='#FF6B6B', end_color='#FFA5A5'
+        )
+        
+        self.save_path = self.create_file_entry(
+            file_frame, "保存位置:", self.select_save_path, 2,
+            start_color='#FF8882', end_color='#FFACAC'
+        )
+
+    def create_file_entry(self, parent, label_text, command, row, start_color, end_color):
+        # 标签
+        label = tk.Label(
+            parent,
+            text=label_text,
+            font=('Microsoft YaHei UI', 10),
+            fg='#333333',
+            bg='#FFFFFF',
+            width=10,  # 固定标签宽度
+            anchor='e'  # 右对齐
+        )
+        label.grid(row=row, column=0, sticky='e', pady=10, padx=(0, 10))
+        
+        # 输入框
+        var = tk.StringVar()
+        entry = tk.Entry(
+            parent,
+            textvariable=var,
+            font=('Microsoft YaHei UI', 10),
+            bg='#F8F8F8',
+            fg='#333333',
+            insertbackground='#666666',
+            relief='flat',
+            highlightthickness=1,
+            highlightcolor='#FF4D6D',
+            highlightbackground='#E0E0E0'
+        )
+        entry.grid(row=row, column=1, sticky='ew', padx=10)
+        
+        # 按钮
+        button = ModernButton(
+            parent,
+            text="选择",
+            command=command,
+            start_color=start_color,
+            end_color=end_color,
+            width=8  # 固定按钮宽度
+        )
+        button.grid(row=row, column=2, padx=(0, 10))
+        
+        return var
+
+    def create_settings_frame(self):
+        settings_frame = tk.LabelFrame(
+            self.main_frame,
+            text="设置",
+            font=('Microsoft YaHei UI', 12, 'bold'),
+            fg='#FF2442',
+            bg='#FFFFFF',
+            padx=20,
+            pady=20,
+            relief='flat'
+        )
+        settings_frame.pack(fill=tk.X, pady=(0, 20), padx=20)
+
+        # 使用Grid布局
+        settings_frame.grid_columnconfigure(1, weight=1)
+        
+        # 创建两个容器框架，分别用于标题设置和标题处理
+        title_container = tk.Frame(settings_frame, bg='#FFFFFF')
+        title_container.grid(row=0, column=0, columnspan=2, sticky='ew', pady=(0, 10))
+        
+        process_container = tk.Frame(settings_frame, bg='#FFFFFF')
+        process_container.grid(row=1, column=0, columnspan=2, sticky='ew')
+        
+        # 标题设置
+        tk.Label(
+            title_container,
+            text="标题设置：",
+            font=('Microsoft YaHei UI', 10),
+            fg='#333333',
+            bg='#FFFFFF',
+            width=10,
+            anchor='e'
+        ).pack(side=tk.LEFT, padx=(0, 10))
+
+        # 第一组单选按钮
+        self.radio_var1 = tk.StringVar(value="option1")
+        tk.Radiobutton(
+            title_container,
+            text="包含标题",
+            variable=self.radio_var1,
+            value="option1",
+            font=('Microsoft YaHei UI', 10),
+            fg='#333333',
+            bg='#FFFFFF',
+            activebackground='#FFE4E8',
+            selectcolor='#FF4D6D'
+        ).pack(side=tk.LEFT, padx=10)
+
+        tk.Radiobutton(
+            title_container,
+            text="只有正文",
+            variable=self.radio_var1,
+            value="option2",
+            font=('Microsoft YaHei UI', 10),
+            fg='#333333',
+            bg='#FFFFFF',
+            activebackground='#FFE4E8',
+            selectcolor='#FF4D6D'
+        ).pack(side=tk.LEFT, padx=10)
+
+        # 标题处理
+        tk.Label(
+            process_container,
+            text="标题处理：",
+            font=('Microsoft YaHei UI', 10),
+            fg='#333333',
+            bg='#FFFFFF',
+            width=10,
+            anchor='e'
+        ).pack(side=tk.LEFT, padx=(0, 10))
+
+        # 第二组单选按钮
+        self.radio_var2 = tk.StringVar(value="option1")
+        tk.Radiobutton(
+            process_container,
+            text="每页不同",
+            variable=self.radio_var2,
+            value="option1",
+            font=('Microsoft YaHei UI', 10),
+            fg='#333333',
+            bg='#FFFFFF',
+            activebackground='#FFE4E8',
+            selectcolor='#FF4D6D'
+        ).pack(side=tk.LEFT, padx=10)
+
+        tk.Radiobutton(
+            process_container,
+            text="统一标题",
+            variable=self.radio_var2,
+            value="option2",
+            font=('Microsoft YaHei UI', 10),
+            fg='#333333',
+            bg='#FFFFFF',
+            activebackground='#FFE4E8',
+            selectcolor='#FF4D6D'
+        ).pack(side=tk.LEFT, padx=10)
+
+    def create_scale_frame(self):
+        scale_frame = tk.LabelFrame(
+            self.main_frame,
+            text="图片尺寸设置",
+            font=('Microsoft YaHei UI', 12, 'bold'),
+            fg='#FF2442',
+            bg='#FFFFFF',
+            padx=20,
+            pady=20,
+            relief='flat'
+        )
+        scale_frame.pack(fill=tk.X, pady=(0, 20), padx=20)
+
+        # 使用容器来居中对齐内容
+        container = tk.Frame(scale_frame, bg='#FFFFFF')
+        container.pack(expand=True)
+        
+        # 宽度设置
+        tk.Label(
+            container,
+            text="宽度:",
+            font=('Microsoft YaHei UI', 10),
+            fg='#333333',
+            bg='#FFFFFF',
+            width=6,
+            anchor='e'
+        ).grid(row=0, column=0, padx=(0, 5))
+        
+        self.width_var = tk.StringVar(value="1920")
+        tk.Entry(
+            container,
+            textvariable=self.width_var,
+            font=('Microsoft YaHei UI', 10),
+            bg='#F8F8F8',
+            fg='#333333',
+            width=8,
+            justify='center'
+        ).grid(row=0, column=1, padx=5)
+        
+        # 高度设置
+        tk.Label(
+            container,
+            text="高度:",
+            font=('Microsoft YaHei UI', 10),
+            fg='#333333',
+            bg='#FFFFFF',
+            width=6,
+            anchor='e'
+        ).grid(row=0, column=2, padx=(20, 5))
+        
+        self.height_var = tk.StringVar(value="1080")
+        tk.Entry(
+            container,
+            textvariable=self.height_var,
+            font=('Microsoft YaHei UI', 10),
+            bg='#F8F8F8',
+            fg='#333333',
+            width=8,
+            justify='center'
+        ).grid(row=0, column=3, padx=5)
+
+    def create_progress_frame(self):
+        progress_frame = tk.Frame(self.main_frame, bg='#FFF0F5')
+        progress_frame.pack(fill=tk.X, pady=(0, 20), padx=20)
+        
+        # 创建圆角进度条背景
+        progress_bg = tk.Canvas(
+            progress_frame,
+            height=20,
+            bg='#FFE4E8',
+            highlightthickness=0
+        )
+        progress_bg.pack(fill=tk.X, padx=2)
+        
+        # 创建进度条
+        self.progress_canvas = tk.Canvas(
+            progress_bg,
+            height=16,
+            bg='#FFE4E8',
+            highlightthickness=0
+        )
+        self.progress_canvas.place(relx=0.01, rely=0.5, relwidth=0.98, anchor='w')
+        
+        # 初始化进度变量
+        self.progress_var = tk.DoubleVar(value=0)
+        
+        # 创建进度文本标签
+        self.progress_label = tk.Label(
+            progress_frame,
+            text="准备就绪",
+            font=('Microsoft YaHei UI', 10),
+            fg='#666666',
+            bg='#FFF0F5'
+        )
+        self.progress_label.pack(pady=10)
+
+        # 绑定进度变量更新事件
+        self.progress_var.trace_add('write', self._update_progress_bar)
+
+    def _update_progress_bar(self, *args):
+        """更新进度条显示"""
+        progress = self.progress_var.get()
+        width = self.progress_canvas.winfo_width()
+        filled_width = int(width * (progress / 100))
+        
+        # 清除原有内容
+        self.progress_canvas.delete('progress')
+        
+        # 绘制圆角进度条
+        if filled_width > 0:
+            # 计算圆角矩形的坐标
+            x1, y1 = 0, 0
+            x2, y2 = filled_width, 16
+            radius = 8  # 圆角半径
+            
+            # 创建圆角矩形路径
+            self.progress_canvas.create_polygon(
+                x1+radius, y1,
+                x2-radius, y1,
+                x2, y1,
+                x2, y2,
+                x2-radius, y2,
+                x1+radius, y2,
+                x1, y2,
+                x1, y1,
+                fill='#FF4D6D',
+                smooth=True,
+                tags='progress'
+            )
+
+    def create_wps_notice(self):
+        notice_frame = tk.Frame(self.main_frame, bg='#FFF0F5')
+        notice_frame.pack(fill=tk.X, pady=(0, 20))
+        
+        tk.Label(
+            notice_frame,
+            text="注意：本机必须安装WPS软件，否则无法生成图片",
+            font=('Microsoft YaHei UI', 10),
+            fg='#FF2442',
+            bg='#FFE4E8',
+            padx=15,
+            pady=10
+        ).pack(fill=tk.X)
+
+    def create_generate_button(self):
+        button_frame = tk.Frame(self.main_frame, bg='#FFF0F5')
+        button_frame.pack(pady=30)
+        
+        self.generate_button = ModernButton(
+            button_frame,
+            text="开始生成",
+            command=self.generate_ppt,
+            width=20,
+            height=2,
+            start_color='#FF2442',  # 小红书主色调
+            end_color='#FF4D6D'
+        )
+        self.generate_button.pack()
 
     def select_ppt(self):
         filename = filedialog.askopenfilename(
@@ -173,8 +563,17 @@ class PPTGeneratorApp:
         except Exception as e:
             raise Exception(f"转换图片时出错: {str(e)}")
 
+    def update_progress(self, value, message):
+        """更新进度条和进度信息"""
+        self.progress_var.set(value)
+        self.progress_label.config(text=message)
+        self.root.update()
+
     def generate_ppt(self):
         try:
+            # 初始化进度
+            self.update_progress(0, "开始处理...")
+            
             # 验证文件路径
             if not self.ppt_path.get():
                 messagebox.showerror("错误", "请选择PPT模板文件")
@@ -200,11 +599,14 @@ class PPTGeneratorApp:
                 messagebox.showerror("错误", "保存文件夹不存在")
                 return
 
-            # 读取Excel文件
+            self.update_progress(10, "读取Excel文件...")
             df = pd.read_excel(self.excel_path.get())
             
-            # 使用python-pptx的Presentation
+            self.update_progress(20, "加载PPT模板...")
             ppt = PptxPresentation(self.ppt_path.get())
+            
+            # 获取数据总行数用于计算进度
+            total_rows = len(df.iloc[1:])
             
             # 获取单选按钮的值
             has_title = self.radio_var1.get() == "option1"  # 是否包含标题
@@ -218,6 +620,8 @@ class PPTGeneratorApp:
             
             # 遍历Excel数据（从第二行开始）
             for index, row in df.iloc[1:].iterrows():
+                progress = 20 + (index / total_rows * 40)  # 20-60%用于生成PPT
+                self.update_progress(progress, f"正在处理第 {index} 行数据...")
                 # 复制整个幻灯片
                 new_slide = ppt.slides.add_slide(template_slide.slide_layout)
                 
@@ -267,22 +671,24 @@ class PPTGeneratorApp:
                                     run.text = content
                             break
             
-            # 保存生成的PPT
+            self.update_progress(60, "保存PPT文件...")
             ppt.save(self.save_path.get())
             
-            # 转换为图片
+            self.update_progress(70, "转换为图片...")
             images_dir = self.convert_ppt_to_images(self.save_path.get())
             
-            # 自动打开生成的PPT文件和图片文件夹
+            self.update_progress(90, "打开生成的文件...")
             try:
                 os.startfile(self.save_path.get())
                 os.startfile(images_dir)
             except Exception as open_error:
                 print(f"打开文件失败: {str(open_error)}")
             
+            self.update_progress(100, "处理完成！")
             messagebox.showinfo("成功", "PPT生成完成！图片已保存到images文件夹")
             
         except Exception as e:
+            self.update_progress(0, "处理出错")
             messagebox.showerror("错误", f"生成过程中出现错误：{str(e)}\n{traceback.format_exc()}")
 
 def main():
