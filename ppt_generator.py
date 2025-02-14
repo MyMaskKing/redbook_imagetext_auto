@@ -1,10 +1,8 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import pandas as pd
-from pptx import Presentation as PptxPresentation
 import os
 import time
-from pptx.util import Pt
 import traceback
 from copy import deepcopy
 from PIL import Image
