@@ -1,13 +1,19 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import pandas as pd
-from pptx import Presentation
+from pptx import Presentation as PptxPresentation
 import os
 import time
 from pptx.util import Pt
 import traceback
 from copy import deepcopy
-from xml.etree.ElementTree import fromstring
+from PIL import Image, ImageDraw, ImageFont
+import io
+from pptx.enum.shapes import MSO_SHAPE_TYPE
+import win32com.client
+import pythoncom
+from spire.presentation import Presentation
+import comtypes.client
 
 class PPTGeneratorApp:
     def __init__(self, root):
@@ -52,8 +58,24 @@ class PPTGeneratorApp:
         ttk.Radiobutton(self.radio_frame, text="所有页面一一对应", variable=self.radio_var2, value="option1").grid(row=1, column=0)
         ttk.Radiobutton(self.radio_frame, text="所有页面统一一个标题", variable=self.radio_var2, value="option2").grid(row=1, column=1)
         
+        # 添加图片设置框
+        self.scale_frame = ttk.LabelFrame(self.main_frame, text="图片设置", padding="5")
+        self.scale_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
+        
+        # 图片宽度设置
+        ttk.Label(self.scale_frame, text="图片宽度:").grid(row=0, column=0, sticky=tk.W)
+        self.width_var = tk.StringVar(value="2000")  # 默认宽度2000
+        self.width_entry = ttk.Entry(self.scale_frame, textvariable=self.width_var, width=10)
+        self.width_entry.grid(row=0, column=1, padx=5)
+        
+        # 图片高度设置
+        ttk.Label(self.scale_frame, text="图片高度:").grid(row=0, column=2, sticky=tk.W, padx=(20,0))
+        self.height_var = tk.StringVar(value="1500")  # 默认高度1500
+        self.height_entry = ttk.Entry(self.scale_frame, textvariable=self.height_var, width=10)
+        self.height_entry.grid(row=0, column=3, padx=5)
+        
         # 生成按钮
-        ttk.Button(self.main_frame, text="开始批量生成PPT", command=self.generate_ppt).grid(row=4, column=0, columnspan=3, pady=10)
+        ttk.Button(self.main_frame, text="开始批量生成", command=self.generate_ppt).grid(row=5, column=0, columnspan=3, pady=10)
 
     def select_ppt(self):
         filename = filedialog.askopenfilename(
@@ -95,6 +117,62 @@ class PPTGeneratorApp:
                     print(f"占位符类型: {shape.placeholder_format.type}")
                 print("---")
 
+    def convert_ppt_to_images(self, ppt_path, batch_size=50):
+        try:
+            # 获取文件名（不含扩展名）作为文件夹名
+            base_name = os.path.splitext(os.path.basename(ppt_path))[0]
+            
+            # 创建与PPT同名的文件夹
+            ppt_dir = os.path.dirname(ppt_path)
+            images_dir = os.path.join(ppt_dir, base_name)
+            if not os.path.exists(images_dir):
+                os.makedirs(images_dir)
+
+            # 初始化COM
+            pythoncom.CoInitialize()
+            
+            try:
+                # 启动 WPS 应用程序
+                wps = comtypes.client.CreateObject("KWPP.Application")
+                wps.Visible = True  # 设置为可见，避免一些COM错误
+                
+                # 打开PPT文件
+                ppt = wps.Presentations
+                presentation = ppt.Open(os.path.abspath(ppt_path))  # 使用绝对路径
+                
+                slide_count = presentation.Slides.Count
+                for batch_start in range(0, slide_count, batch_size):
+                    for i in range(batch_start, min(batch_start + batch_size, slide_count)):
+                        slide = presentation.Slides.Item(i + 1)  # 使用Item方法
+                        # 生成输出文件路径
+                        output_path = os.path.join(images_dir, f"{base_name}_第{i+1}页.jpg")
+                        
+                        # 导出当前幻灯片为JPG格式
+                        slide.Export(output_path, "JPG")
+                        print(f"已将幻灯片 {i + 1} 保存为 {output_path}")
+                        
+                        # 使用Pillow来提高清晰度（DPI）
+                        img = Image.open(output_path)
+                        img.save(output_path, "JPEG", quality=95, dpi=(300, 300))
+                    
+                    print(f"已处理第{batch_start + 1}到{min(batch_start + batch_size, slide_count)}张幻灯片")
+                
+                return images_dir
+                
+            finally:
+                # 清理资源
+                try:
+                    if 'presentation' in locals():
+                        presentation.Close()
+                    if 'wps' in locals():
+                        wps.Quit()
+                except:
+                    pass
+                pythoncom.CoUninitialize()
+                
+        except Exception as e:
+            raise Exception(f"转换图片时出错: {str(e)}")
+
     def generate_ppt(self):
         try:
             # 验证文件路径
@@ -125,8 +203,8 @@ class PPTGeneratorApp:
             # 读取Excel文件
             df = pd.read_excel(self.excel_path.get())
             
-            # 读取PPT模板
-            ppt = Presentation(self.ppt_path.get())
+            # 使用python-pptx的Presentation
+            ppt = PptxPresentation(self.ppt_path.get())
             
             # 获取单选按钮的值
             has_title = self.radio_var1.get() == "option1"  # 是否包含标题
@@ -192,13 +270,17 @@ class PPTGeneratorApp:
             # 保存生成的PPT
             ppt.save(self.save_path.get())
             
-            # 自动打开生成的PPT文件
+            # 转换为图片
+            images_dir = self.convert_ppt_to_images(self.save_path.get())
+            
+            # 自动打开生成的PPT文件和图片文件夹
             try:
                 os.startfile(self.save_path.get())
+                os.startfile(images_dir)
             except Exception as open_error:
                 print(f"打开文件失败: {str(open_error)}")
             
-            messagebox.showinfo("成功", "PPT生成完成！")
+            messagebox.showinfo("成功", "PPT生成完成！图片已保存到images文件夹")
             
         except Exception as e:
             messagebox.showerror("错误", f"生成过程中出现错误：{str(e)}\n{traceback.format_exc()}")
