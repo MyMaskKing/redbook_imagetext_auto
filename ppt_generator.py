@@ -7,12 +7,7 @@ import time
 from pptx.util import Pt
 import traceback
 from copy import deepcopy
-from PIL import Image, ImageDraw, ImageFont, ImageTk
-import io
-from pptx.enum.shapes import MSO_SHAPE_TYPE
-import win32com.client
-import pythoncom
-from spire.presentation import Presentation
+from PIL import Image
 import comtypes.client
 
 class ModernButton(tk.Button):
@@ -37,21 +32,14 @@ class ModernButton(tk.Button):
         
         super().__init__(master, **kwargs)
         
-        # 圆角效果（使用Canvas实现）
-        self.canvas = tk.Canvas(self, width=20, height=20, bg=self.start_color, 
-                              highlightthickness=0)
-        self.canvas.create_arc(0, 0, 20, 20, start=90, extent=90, fill=self.start_color)
-        
         self.bind('<Enter>', self.on_enter)
         self.bind('<Leave>', self.on_leave)
 
     def on_enter(self, e):
         self.config(background=self.end_color)
-        self.canvas.config(bg=self.end_color)
 
     def on_leave(self, e):
         self.config(background=self.start_color)
-        self.canvas.config(bg=self.start_color)
 
 class PPTGeneratorApp:
     def __init__(self, root):
@@ -495,20 +483,12 @@ class PPTGeneratorApp:
             save_path = os.path.join(dirname, default_filename)
             self.save_path.set(save_path)
 
-    def print_shape_info(self, ppt):
-        for slide in ppt.slides:
-            print("\n=== 幻灯片信息 ===")
-            for shape in slide.shapes:
-                print(f"形状名称: {shape.name}")
-                print(f"形状类型: {shape.shape_type}")
-                if hasattr(shape, "text"):
-                    print(f"文本内容: {shape.text}")
-                if hasattr(shape, "placeholder_format"):
-                    print(f"占位符类型: {shape.placeholder_format.type}")
-                print("---")
-
     def convert_ppt_to_images(self, ppt_path, batch_size=50):
         try:
+            # 获取用户设置的尺寸
+            width = int(self.width_var.get())
+            height = int(self.height_var.get())
+            
             # 获取文件名（不含扩展名）作为文件夹名
             base_name = os.path.splitext(os.path.basename(ppt_path))[0]
             
@@ -518,17 +498,14 @@ class PPTGeneratorApp:
             if not os.path.exists(images_dir):
                 os.makedirs(images_dir)
 
-            # 初始化COM
-            pythoncom.CoInitialize()
+            # 启动 WPS 应用程序
+            wps = comtypes.client.CreateObject("KWPP.Application")
+            wps.Visible = True  # 设置为可见，避免一些COM错误
             
             try:
-                # 启动 WPS 应用程序
-                wps = comtypes.client.CreateObject("KWPP.Application")
-                wps.Visible = True  # 设置为可见，避免一些COM错误
-                
                 # 打开PPT文件
                 ppt = wps.Presentations
-                presentation = ppt.Open(os.path.abspath(ppt_path))  # 使用绝对路径
+                presentation = ppt.Open(os.path.abspath(ppt_path))
                 
                 slide_count = presentation.Slides.Count
                 for batch_start in range(0, slide_count, batch_size):
@@ -558,7 +535,6 @@ class PPTGeneratorApp:
                         wps.Quit()
                 except:
                     pass
-                pythoncom.CoUninitialize()
                 
         except Exception as e:
             raise Exception(f"转换图片时出错: {str(e)}")
@@ -600,93 +576,112 @@ class PPTGeneratorApp:
                 return
 
             self.update_progress(10, "读取Excel文件...")
-            df = pd.read_excel(self.excel_path.get())
+            # 读取Excel文件，跳过空行
+            df = pd.read_excel(self.excel_path.get()).dropna(how='all')
+            
+            # 打印数据行数信息，用于调试
+            print(f"总行数: {len(df)}")
+            print(f"所有数据: {df.values.tolist()}")
+            
+            # 获取数据总行数
+            total_rows = len(df)
             
             self.update_progress(20, "加载PPT模板...")
-            ppt = PptxPresentation(self.ppt_path.get())
+            wps = comtypes.client.CreateObject("KWPP.Application")
+            wps.Visible = True
             
-            # 获取数据总行数用于计算进度
-            total_rows = len(df.iloc[1:])
-            
-            # 获取单选按钮的值
-            has_title = self.radio_var1.get() == "option1"  # 是否包含标题
-            unified_title = self.radio_var2.get() == "option2"  # 是否统一标题
-            
-            # 获取模板第一页
-            template_slide = ppt.slides[0]
-            
-            # 获取Excel的第一行（用于匹配PPT中的对象）
-            headers = df.iloc[0]
-            
-            # 遍历Excel数据（从第二行开始）
-            for index, row in df.iloc[1:].iterrows():
-                progress = 20 + (index / total_rows * 40)  # 20-60%用于生成PPT
-                self.update_progress(progress, f"正在处理第 {index} 行数据...")
-                # 复制整个幻灯片
-                new_slide = ppt.slides.add_slide(template_slide.slide_layout)
+            try:
+                # 打开PPT文件
+                ppt = wps.Presentations
+                template = ppt.Open(os.path.abspath(self.ppt_path.get()))
+                new_ppt = ppt.Add()
                 
-                # 删除新幻灯片中的默认形状
-                for shape in new_slide.shapes:
-                    element = shape._element
-                    element.getparent().remove(element)
+                # 获取单选按钮的值
+                has_title = self.radio_var1.get() == "option1"
+                unified_title = self.radio_var2.get() == "option2"
                 
-                # 从模板导入所有形状（包括格式和背景）
-                for shape in template_slide.shapes:
-                    el = shape.element
-                    new_el = deepcopy(el)
-                    new_slide.shapes._spTree.insert_element_before(new_el, 'p:extLst')
+                # 获取模板第一页
+                template_slide = template.Slides(1)
                 
-                # 遍历所有形状并只更新文本内容
-                for shape in new_slide.shapes:
-                    if not hasattr(shape, 'text_frame'):
+                # 遍历Excel的每一行数据（包括第一行）
+                for i in range(len(df)):
+                    # 打印当前处理的行号，用于调试
+                    print(f"正在处理第 {i + 1} 行")
+                    
+                    progress = 20 + (i / total_rows * 40)
+                    self.update_progress(progress, f"正在处理第 {i + 1} 行数据...")
+                    
+                    # 获取当前行数据
+                    row = df.iloc[i]
+                    if row.isna().all():  # 跳过完全空的行
+                        print(f"跳过空行: {i + 1}")
                         continue
                     
-                    # 获取shape的名称
-                    shape_name = shape.name
-                    print(f"当前形状名称: {shape_name}")  # 调试信息
+                    # 复制模板页面到新PPT
+                    template_slide.Copy()
+                    new_slide = new_ppt.Slides.Paste()
                     
-                    # 在Excel的列名中查找匹配的内容
-                    for col, header_text in headers.items():
-                        if str(col).strip() == shape_name.strip():
-                            # 找到匹配的列，获取对应的内容
-                            content = str(row[col])
-                            print(f"匹配到列: {col}, 内容: {content}")  # 调试信息
-                            
-                            # 如果是标题且选择了"只有正文"，则跳过
-                            if "标题" in shape_name and not has_title:
-                                continue
+                    # 遍历所有形状并更新文本内容
+                    for shape in new_slide.Shapes:
+                        try:
+                            if shape.HasTextFrame:
+                                shape_name = shape.Name
+                                print(f"处理形状: {shape_name}")  # 调试信息
                                 
-                            # 如果是标题且选择了"统一标题"
-                            if "标题" in shape_name and unified_title:
-                                content = str(df.iloc[1][col]) if index == 1 else shape.text_frame.text
-                            
-                            # 只更新文本内容，保持原有格式
-                            for paragraph in shape.text_frame.paragraphs:
-                                if paragraph.runs:
-                                    # 保持原有格式，只更新文本
-                                    paragraph.runs[0].text = content
-                                else:
-                                    # 如果没有runs，创建新的并复制原有格式
-                                    run = paragraph.add_run()
-                                    run.text = content
-                            break
-            
-            self.update_progress(60, "保存PPT文件...")
-            ppt.save(self.save_path.get())
-            
-            self.update_progress(70, "转换为图片...")
-            images_dir = self.convert_ppt_to_images(self.save_path.get())
-            
-            self.update_progress(90, "打开生成的文件...")
-            try:
-                os.startfile(self.save_path.get())
-                os.startfile(images_dir)
-            except Exception as open_error:
-                print(f"打开文件失败: {str(open_error)}")
-            
-            self.update_progress(100, "处理完成！")
-            messagebox.showinfo("成功", "PPT生成完成！图片已保存到images文件夹")
-            
+                                # 直接使用形状名称作为列名查找对应的内容
+                                if shape_name in df.columns:
+                                    content = str(row[shape_name])
+                                    print(f"匹配到内容: {content}")  # 调试信息
+                                    
+                                    if "标题" in shape_name and not has_title:
+                                        continue
+                                    
+                                    if "标题" in shape_name and unified_title:
+                                        content = str(df.iloc[0][shape_name]) if i == 0 else shape.TextFrame.TextRange.Text
+                                    
+                                    shape.TextFrame.TextRange.Text = content
+                        except Exception as shape_error:
+                            print(f"处理形状时出错: {str(shape_error)}")
+                            continue
+                
+                self.update_progress(60, "保存PPT文件...")
+                # 保存新的PPT文件
+                new_ppt.SaveAs(os.path.abspath(self.save_path.get()))
+                
+                self.update_progress(70, "转换为图片...")
+                images_dir = self.convert_ppt_to_images(self.save_path.get())
+                
+                self.update_progress(90, "清理资源...")
+                # 关闭文件和应用程序
+                try:
+                    new_ppt.Close()
+                    template.Close()
+                    wps.Quit()
+                except:
+                    pass
+                
+                self.update_progress(95, "打开生成的文件...")
+                try:
+                    os.startfile(self.save_path.get())
+                    os.startfile(images_dir)
+                except Exception as open_error:
+                    print(f"打开文件失败: {str(open_error)}")
+                
+                self.update_progress(100, "处理完成！")
+                messagebox.showinfo("成功", "PPT生成完成！图片已保存到images文件夹")
+                
+            finally:
+                # 清理资源
+                try:
+                    if 'new_ppt' in locals():
+                        new_ppt.Close()
+                    if 'template' in locals():
+                        template.Close()
+                    if 'wps' in locals():
+                        wps.Quit()
+                except:
+                    pass
+                
         except Exception as e:
             self.update_progress(0, "处理出错")
             messagebox.showerror("错误", f"生成过程中出现错误：{str(e)}\n{traceback.format_exc()}")
