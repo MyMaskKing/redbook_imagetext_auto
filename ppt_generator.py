@@ -311,6 +311,24 @@ class PPTGeneratorApp:
         container = tk.Frame(scale_frame, bg='#FFFFFF')
         container.pack(expand=True)
         
+        # 添加链接到右上角
+        link_label = tk.Label(
+            scale_frame,
+            text="小红书抖音图片尺寸说明",
+            font=('Microsoft YaHei UI', 9, 'underline'),
+            fg='#FF4D6D',
+            bg='#FFFFFF',
+            cursor='hand2'
+        )
+        link_label.place(relx=1.0, y=0, anchor='ne', x=-20)
+        
+        # 添加链接点击事件
+        def open_link(event):
+            import webbrowser
+            webbrowser.open('https://kdocs.cn/l/cpCXrxJCZlzi?linkname=TSby1ZRlVS')
+        
+        link_label.bind('<Button-1>', open_link)
+        
         # 宽度设置
         tk.Label(
             container,
