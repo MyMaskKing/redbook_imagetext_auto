@@ -498,7 +498,7 @@ class PPTGeneratorApp:
 
             # 启动 WPS 应用程序
             wps = comtypes.client.CreateObject("KWPP.Application")
-            wps.Visible = True  # 设置为可见，避免一些COM错误
+            wps.Visible = True
             
             try:
                 # 打开PPT文件
@@ -508,16 +508,17 @@ class PPTGeneratorApp:
                 slide_count = presentation.Slides.Count
                 for batch_start in range(0, slide_count, batch_size):
                     for i in range(batch_start, min(batch_start + batch_size, slide_count)):
-                        slide = presentation.Slides.Item(i + 1)  # 使用Item方法
+                        slide = presentation.Slides.Item(i + 1)
                         # 生成输出文件路径
                         output_path = os.path.join(images_dir, f"{base_name}_第{i+1}页.jpg")
                         
                         # 导出当前幻灯片为JPG格式
-                        slide.Export(output_path, "JPG")
+                        slide.Export(output_path, "JPG", width, height)  # 添加宽度和高度参数
                         print(f"已将幻灯片 {i + 1} 保存为 {output_path}")
                         
-                        # 使用Pillow来提高清晰度（DPI）
+                        # 使用Pillow确保图片质量和尺寸
                         img = Image.open(output_path)
+                        img = img.resize((width, height), Image.Resampling.LANCZOS)  # 使用高质量的重采样方法
                         img.save(output_path, "JPEG", quality=95, dpi=(300, 300))
                     
                     print(f"已处理第{batch_start + 1}到{min(batch_start + batch_size, slide_count)}张幻灯片")
