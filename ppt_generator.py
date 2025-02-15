@@ -340,7 +340,7 @@ class PPTGeneratorApp:
             anchor='e'
         ).grid(row=0, column=0, padx=(0, 5))
         
-        self.width_var = tk.StringVar(value="1920")
+        self.width_var = tk.StringVar(value="1242")
         tk.Entry(
             container,
             textvariable=self.width_var,
@@ -362,7 +362,7 @@ class PPTGeneratorApp:
             anchor='e'
         ).grid(row=0, column=2, padx=(20, 5))
         
-        self.height_var = tk.StringVar(value="1080")
+        self.height_var = tk.StringVar(value="1660")
         tk.Entry(
             container,
             textvariable=self.height_var,
