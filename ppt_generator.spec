@@ -6,7 +6,7 @@ a = Analysis(
     ['ppt_generator.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[('redbook.ico', '.')],
     hiddenimports=[
         'pandas',
         'PIL',
