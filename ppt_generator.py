@@ -592,33 +592,63 @@ class PPTGeneratorApp:
                 # 打开PPT文件
                 ppt = wps.Presentations
                 template = ppt.Open(os.path.abspath(self.ppt_path.get()))
-                new_ppt = ppt.Add()
+                
+                # 复制整个模板文件到新位置
+                template.SaveAs(self.save_path.get())
+                template.Close()  # 关闭模板文件
+                
+                # 打开新保存的文件进行编辑
+                new_ppt = ppt.Open(os.path.abspath(self.save_path.get()))
                 
                 # 获取单选按钮的值
                 has_title = self.radio_var1.get() == "option1"
                 unified_title = self.radio_var2.get() == "option2"
                 
-                # 获取模板第一页
-                template_slide = template.Slides(1)
+                # 获取第一页作为模板页（不删除它）
+                template_slide = new_ppt.Slides(1)
+                
+                # 获取模板页面的背景属性
+                template_background = template_slide.Background
+                template_fill = template_background.Fill
+                template_fore_color = template_fill.ForeColor.RGB
+                template_back_color = template_fill.BackColor.RGB
+                print(f"模板页面背景色信息:")
+                print(f"- 填充类型: {template_fill.Type}")
+                print(f"- 前景色: {template_fore_color}")
+                print(f"- 背景色: {template_back_color}")
                 
                 # 遍历Excel的每一行数据（包括第一行）
                 for i in range(len(df)):
-                    # 打印当前处理的行号，用于调试
-                    print(f"正在处理第 {i + 1} 行")
-                    
                     progress = 20 + (i / total_rows * 40)
                     self.update_progress(progress, f"正在处理第 {i + 1} 行数据...")
                     
                     # 获取当前行数据
                     row = df.iloc[i]
-                    if row.isna().all():  # 跳过完全空的行
-                        print(f"跳过空行: {i + 1}")
-                        continue
                     
-                    # 复制模板页面到新PPT
-                    template_slide.Copy()
-                    new_slide = new_ppt.Slides.Paste()
-                    
+                    if i > 0:  # 第一页已经存在，只为后续数据创建新页面
+                        # 复制第一页
+                        new_ppt.Application.ActiveWindow.View.GotoSlide(1)  # 跳转到第一页
+                        template_slide.Copy()  # 复制第一页
+                        new_slide = new_ppt.Slides.Paste()  # 粘贴到末尾
+                        
+                        # 设置新页面的背景色，确保与模板一致
+                        new_background = new_slide.Background
+                        new_fill = new_background.Fill
+                        new_fill.ForeColor.RGB = template_fore_color
+                        new_fill.BackColor.RGB = template_back_color
+                        
+                        # 检查新页面的背景色
+                        try:
+                            print(f"\n第 {i+1} 页背景色信息:")
+                            print(f"- 填充类型: {new_fill.Type}")
+                            print(f"- 前景色: {new_fill.ForeColor.RGB}")
+                            print(f"- 背景色: {new_fill.BackColor.RGB}")
+                        except Exception as bg_error:
+                            print(f"获取新页面背景色信息出错: {str(bg_error)}")
+                    else:
+                        # 使用第一页
+                        new_slide = template_slide
+
                     # 遍历所有形状并更新文本内容
                     for shape in new_slide.Shapes:
                         try:
@@ -653,7 +683,6 @@ class PPTGeneratorApp:
                 # 关闭文件和应用程序
                 try:
                     new_ppt.Close()
-                    template.Close()
                     wps.Quit()
                 except:
                     pass
@@ -673,8 +702,6 @@ class PPTGeneratorApp:
                 try:
                     if 'new_ppt' in locals():
                         new_ppt.Close()
-                    if 'template' in locals():
-                        template.Close()
                     if 'wps' in locals():
                         wps.Quit()
                 except:
