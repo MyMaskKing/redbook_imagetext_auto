@@ -474,12 +474,8 @@ class PPTGeneratorApp:
             title="选择保存文件夹"
         )
         if dirname:
-            # 生成默认文件名（当前时间）
-            current_time = time.strftime("%Y%m%d_%H%M%S")
-            default_filename = f"小红书图文_{current_time}.pptx"
-            # 组合完整的保存路径
-            save_path = os.path.join(dirname, default_filename)
-            self.save_path.set(save_path)
+            # 只设置文件夹路径
+            self.save_path.set(dirname)
 
     def convert_ppt_to_images(self, ppt_path, batch_size=50):
         try:
@@ -569,10 +565,15 @@ class PPTGeneratorApp:
                 return
             
             # 验证保存路径的文件夹是否存在
-            save_dir = os.path.dirname(self.save_path.get())
+            save_dir = self.save_path.get()  # 现在这是文件夹路径
             if not os.path.exists(save_dir):
                 messagebox.showerror("错误", "保存文件夹不存在")
                 return
+
+            # 生成完整的保存路径（添加文件名）
+            current_time = time.strftime("%Y%m%d_%H%M%S")
+            save_filename = f"小红书图文_{current_time}.pptx"
+            full_save_path = os.path.join(save_dir, save_filename)
 
             self.update_progress(10, "读取Excel文件...")
             # 读取Excel文件，跳过空行
@@ -595,11 +596,11 @@ class PPTGeneratorApp:
                 template = ppt.Open(os.path.abspath(self.ppt_path.get()))
                 
                 # 复制整个模板文件到新位置
-                template.SaveAs(self.save_path.get())
+                template.SaveAs(full_save_path)
                 template.Close()  # 关闭模板文件
                 
                 # 打开新保存的文件进行编辑
-                new_ppt = ppt.Open(os.path.abspath(self.save_path.get()))
+                new_ppt = ppt.Open(full_save_path)
                 
                 # 获取单选按钮的值
                 has_title = self.radio_var1.get() == "option1"
@@ -675,10 +676,10 @@ class PPTGeneratorApp:
                 
                 self.update_progress(60, "保存PPT文件...")
                 # 保存新的PPT文件
-                new_ppt.SaveAs(os.path.abspath(self.save_path.get()))
+                new_ppt.SaveAs(full_save_path)
                 
                 self.update_progress(70, "转换为图片...")
-                images_dir = self.convert_ppt_to_images(self.save_path.get())
+                images_dir = self.convert_ppt_to_images(full_save_path)
                 
                 self.update_progress(90, "清理资源...")
                 # 关闭文件和应用程序
@@ -690,7 +691,7 @@ class PPTGeneratorApp:
                 
                 self.update_progress(95, "打开生成的文件...")
                 try:
-                    os.startfile(self.save_path.get())
+                    os.startfile(full_save_path)
                     os.startfile(images_dir)
                 except Exception as open_error:
                     print(f"打开文件失败: {str(open_error)}")
