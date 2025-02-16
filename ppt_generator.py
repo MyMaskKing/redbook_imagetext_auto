@@ -7,6 +7,7 @@ import traceback
 from copy import deepcopy
 from PIL import Image
 import comtypes.client
+import requests
 
 class ModernButton(tk.Button):
     def __init__(self, master, **kwargs):
@@ -595,8 +596,24 @@ class PPTGeneratorApp:
         )
         template_text.pack(fill=tk.X, expand=True)
         
-        # 设置文本内容
-        template_content = """请帮我查找关于"2025年手机发布"的内容，生成的格式为表格，有三列：标题，内容，预测价格,并且帮我生成150字的小红书爆文，要求足够吸引人眼球，里面可以插入一些表情。"""
+        # 获取模板内容
+        try:
+            response = requests.get('https://webapi.mymaskking.us.kg/get_ai_template_hint', timeout=5)  # 添加5秒超时
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('status') == 200:
+                    template_content = data['data']['templates']
+                else:
+                    raise Exception('API返回状态错误')
+            else:
+                raise Exception('HTTP请求失败')
+        except requests.Timeout:
+            print("获取模板内容超时")
+            template_content = """请帮我查找关于"今日的科技新闻"的内容，生成的格式为表格，有三列：标题，内容,并且帮我生成150字的小红书爆文，要求爆文标题和爆文内容足够吸引人眼球，里面可以插入一些表情"""
+        except Exception as e:
+            print(f"获取模板内容失败: {str(e)}")
+            template_content = """请帮我查找关于"今日的科技新闻"的内容，生成的格式为表格，有三列：标题，内容,并且帮我生成150字的小红书爆文，要求爆文标题和爆文内容足够吸引人眼球，里面可以插入一些表情"""
+        
         template_text.insert('1.0', template_content)
         template_text.config(state='disabled')
 
