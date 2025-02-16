@@ -95,6 +95,9 @@ class PPTGeneratorApp:
         # 文件选择区域
         self.create_file_frame()
         
+        # 添加AI提问模板区域
+        self.create_ai_template_frame()
+        
         # 设置区域
         self.create_settings_frame()
         
@@ -558,6 +561,81 @@ class PPTGeneratorApp:
             padx=15,
             pady=10
         ).pack(fill=tk.X)
+
+    def create_ai_template_frame(self):
+        """创建AI提问模板区域"""
+        template_frame = tk.LabelFrame(
+            self.main_frame,
+            text="AI提问模板",
+            font=('Microsoft YaHei UI', 12, 'bold'),
+            fg='#FF2442',
+            bg='#FFFFFF',
+            padx=25,
+            pady=25,
+            relief='flat'
+        )
+        template_frame.pack(fill=tk.X, pady=(0, 20), padx=20)
+
+        # 创建文本框容器，使用相对定位
+        text_container = tk.Frame(template_frame, bg='#FFFFFF', padx=1, pady=1)
+        text_container.pack(fill=tk.X)
+        text_container.grid_propagate(False)  # 防止内容影响容器大小
+
+        # 创建只读文本框
+        template_text = tk.Text(
+            text_container,
+            font=('Microsoft YaHei UI', 10),
+            bg='#F8F8F8',
+            fg='#333333',
+            height=4,
+            relief='flat',
+            padx=10,
+            pady=10,
+            wrap=tk.WORD
+        )
+        template_text.pack(fill=tk.X, expand=True)
+        
+        # 设置文本内容
+        template_content = """请帮我查找关于"2025年手机发布"的内容，生成的格式为表格，有三列：标题，内容，预测价格,并且帮我生成150字的小红书爆文，要求足够吸引人眼球，里面可以插入一些表情。"""
+        template_text.insert('1.0', template_content)
+        template_text.config(state='disabled')
+
+        # 创建复制按钮
+        copy_button = tk.Label(
+            text_container,
+            text="复制",
+            font=('Microsoft YaHei UI', 8),
+            fg='#666666',
+            bg='#EAEAEA',
+            padx=10,
+            pady=2,
+            cursor='hand2'
+        )
+        
+        # 使用place将按钮放在右下角
+        copy_button.place(relx=1.0, rely=1.0, x=-15, y=-10, anchor='se')
+
+        # 绑定点击和悬停事件
+        def on_click(e):
+            self.copy_template(template_text)
+            copy_button.configure(bg='#D9D9D9')
+            copy_button.after(100, lambda: copy_button.configure(bg='#EAEAEA'))
+        
+        def on_enter(e):
+            copy_button.configure(bg='#D9D9D9')
+        
+        def on_leave(e):
+            copy_button.configure(bg='#EAEAEA')
+        
+        copy_button.bind('<Button-1>', on_click)
+        copy_button.bind('<Enter>', on_enter)
+        copy_button.bind('<Leave>', on_leave)
+
+    def copy_template(self, text_widget):
+        """复制文本框内容到剪贴板"""
+        self.root.clipboard_clear()
+        self.root.clipboard_append(text_widget.get('1.0', tk.END).strip())
+        messagebox.showinfo("提示", "已复制到剪贴板！")
 
     def create_generate_button(self):
         button_frame = tk.Frame(self.main_frame, bg='#FFF0F5')
