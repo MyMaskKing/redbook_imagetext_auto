@@ -301,77 +301,180 @@ class PPTGeneratorApp:
             font=('Microsoft YaHei UI', 12, 'bold'),
             fg='#FF2442',
             bg='#FFFFFF',
-            padx=20,
-            pady=20,
+            padx=25,
+            pady=25,
             relief='flat'
         )
         scale_frame.pack(fill=tk.X, pady=(0, 20), padx=20)
 
         # 使用容器来居中对齐内容
         container = tk.Frame(scale_frame, bg='#FFFFFF')
-        container.pack(expand=True)
+        container.pack(expand=True, fill=tk.X, padx=15)
         
-        # 添加链接到右上角
-        link_label = tk.Label(
-            scale_frame,
-            text="小红书抖音图片尺寸说明",
-            font=('Microsoft YaHei UI', 9, 'underline'),
-            fg='#FF4D6D',
-            bg='#FFFFFF',
-            cursor='hand2'
-        )
-        link_label.place(relx=1.0, y=0, anchor='ne', x=-20)
+        # 预设尺寸选项
+        size_options = [
+            "自定义尺寸",
+            "小红书封面（竖版）- 1080×1440",
+            "小红书封面（横版）- 1440×1080",
+            "小红书封面（方版）- 1080×1080",
+            "小红书图文封面（竖版）- 1242×1660",
+            "小红书图文封面（方版）- 1080×1080",
+            "小红书图文封面（横版）- 2560×1440",
+            "抖音视频封面 - 1080×1920",
+            "抖音预览封面 - 1080×1464",
+            "抖音个人主页背景 - 1125×633"
+        ]
         
-        # 添加链接点击事件
-        def open_link(event):
-            import webbrowser
-            webbrowser.open('https://kdocs.cn/l/cpCXrxJCZlzi?linkname=TSby1ZRlVS')
+        # 尺寸映射字典
+        self.size_mapping = {
+            "自定义尺寸": None,
+            "小红书封面（竖版）- 1080×1440": (1080, 1440),
+            "小红书封面（横版）- 1440×1080": (1440, 1080),
+            "小红书封面（方版）- 1080×1080": (1080, 1080),
+            "小红书图文封面（竖版）- 1242×1660": (1242, 1660),
+            "小红书图文封面（方版）- 1080×1080": (1080, 1080),
+            "小红书图文封面（横版）- 2560×1440": (2560, 1440),
+            "抖音视频封面 - 1080×1920": (1080, 1920),
+            "抖音预览封面 - 1080×1464": (1080, 1464),
+            "抖音个人主页背景 - 1125×633": (1125, 633)
+        }
         
-        link_label.bind('<Button-1>', open_link)
+        # 创建居中容器
+        center_frame = tk.Frame(container, bg='#FFFFFF')
+        center_frame.pack(anchor='center', pady=(0, 20))
         
-        # 宽度设置
+        # 预设尺寸组
+        preset_frame = tk.Frame(center_frame, bg='#FFFFFF')
+        preset_frame.pack(side=tk.LEFT)
+        
         tk.Label(
-            container,
+            preset_frame,
+            text="预设尺寸:",
+            font=('Microsoft YaHei UI', 10),
+            fg='#333333',
+            bg='#FFFFFF'
+        ).pack(side=tk.LEFT, padx=(0, 8))
+        
+        # 创建圆角下拉框容器
+        combo_container = tk.Frame(preset_frame, bg='#E0E0E0', padx=1, pady=1)
+        combo_container.pack(side=tk.LEFT)
+        
+        # 设置下拉框样式
+        style = ttk.Style()
+        style.configure(
+            'Rounded.TCombobox',
+            background='#FFFFFF',
+            fieldbackground='#FFFFFF',
+            foreground='#333333',
+            arrowcolor='#FF2442',
+            borderwidth=0,
+            padding=8
+        )
+        
+        self.size_var = tk.StringVar(value="小红书图文封面（竖版）- 1242×1660")
+        size_combo = ttk.Combobox(
+            combo_container,
+            textvariable=self.size_var,
+            values=size_options,
+            state='readonly',
+            width=25,
+            font=('Microsoft YaHei UI', 10),
+            style='Rounded.TCombobox'
+        )
+        size_combo.pack(padx=1, pady=1)
+        
+        # 创建第二行居中容器
+        input_center_frame = tk.Frame(container, bg='#FFFFFF')
+        input_center_frame.pack(anchor='center', pady=(10, 0))
+        
+        # 宽度输入组
+        width_frame = tk.Frame(input_center_frame, bg='#FFFFFF')
+        width_frame.pack(side=tk.LEFT, padx=(0, 30))
+        
+        tk.Label(
+            width_frame,
             text="宽度:",
             font=('Microsoft YaHei UI', 10),
             fg='#333333',
-            bg='#FFFFFF',
-            width=6,
-            anchor='e'
-        ).grid(row=0, column=0, padx=(0, 5))
+            bg='#FFFFFF'
+        ).pack(side=tk.LEFT, padx=(0, 8))
+        
+        # 创建圆角输入框容器
+        width_entry_container = tk.Frame(width_frame, bg='#E0E0E0', padx=1, pady=1)
+        width_entry_container.pack(side=tk.LEFT)
         
         self.width_var = tk.StringVar(value="1242")
-        tk.Entry(
-            container,
+        self.width_entry = tk.Entry(
+            width_entry_container,
             textvariable=self.width_var,
             font=('Microsoft YaHei UI', 10),
-            bg='#F8F8F8',
-            fg='#333333',
             width=8,
-            justify='center'
-        ).grid(row=0, column=1, padx=5)
+            relief='flat',
+            justify='center',
+            bg='#FFFFFF'
+        )
+        self.width_entry.pack(padx=1, pady=1)
         
-        # 高度设置
+        # 高度输入组
+        height_frame = tk.Frame(input_center_frame, bg='#FFFFFF')
+        height_frame.pack(side=tk.LEFT)
+        
         tk.Label(
-            container,
+            height_frame,
             text="高度:",
             font=('Microsoft YaHei UI', 10),
             fg='#333333',
-            bg='#FFFFFF',
-            width=6,
-            anchor='e'
-        ).grid(row=0, column=2, padx=(20, 5))
+            bg='#FFFFFF'
+        ).pack(side=tk.LEFT, padx=(0, 8))
+        
+        # 创建圆角输入框容器
+        height_entry_container = tk.Frame(height_frame, bg='#E0E0E0', padx=1, pady=1)
+        height_entry_container.pack(side=tk.LEFT)
         
         self.height_var = tk.StringVar(value="1660")
-        tk.Entry(
-            container,
+        self.height_entry = tk.Entry(
+            height_entry_container,
             textvariable=self.height_var,
             font=('Microsoft YaHei UI', 10),
-            bg='#F8F8F8',
-            fg='#333333',
             width=8,
-            justify='center'
-        ).grid(row=0, column=3, padx=5)
+            relief='flat',
+            justify='center',
+            bg='#FFFFFF'
+        )
+        self.height_entry.pack(padx=1, pady=1)
+        
+        # 添加输入框焦点事件
+        def on_focus_in(event, container):
+            container.configure(bg='#FF2442')
+        
+        def on_focus_out(event, container):
+            container.configure(bg='#E0E0E0')
+        
+        self.width_entry.bind('<FocusIn>', lambda e: on_focus_in(e, width_entry_container))
+        self.width_entry.bind('<FocusOut>', lambda e: on_focus_out(e, width_entry_container))
+        self.height_entry.bind('<FocusIn>', lambda e: on_focus_in(e, height_entry_container))
+        self.height_entry.bind('<FocusOut>', lambda e: on_focus_out(e, height_entry_container))
+        
+        # 绑定下拉框选择事件
+        size_combo.bind('<<ComboboxSelected>>', self.on_size_selected)
+        
+        # 初始状态下禁用输入框
+        self.width_entry.config(state='disabled')
+        self.height_entry.config(state='disabled')
+
+    def on_size_selected(self, event):
+        """处理尺寸选择事件"""
+        selected = self.size_var.get()
+        if selected == "自定义尺寸":
+            self.width_entry.config(state='normal')
+            self.height_entry.config(state='normal')
+        else:
+            self.width_entry.config(state='disabled')
+            self.height_entry.config(state='disabled')
+            if selected in self.size_mapping:
+                width, height = self.size_mapping[selected]
+                self.width_var.set(str(width))
+                self.height_var.set(str(height))
 
     def create_progress_frame(self):
         progress_frame = tk.Frame(self.main_frame, bg='#FFF0F5')
