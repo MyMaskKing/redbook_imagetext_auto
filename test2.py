@@ -3,6 +3,7 @@ import comtypes.client
 from PIL import Image
 
 
+
 def ppt_to_png(ppt_file, output_dir, batch_size=50):
     # 启动 WPS 应用程序
     wps = comtypes.client.CreateObject("KWPP.Application")  # 使用KWPP而不是kWPS
