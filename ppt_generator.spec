@@ -22,7 +22,12 @@ a = Analysis(
         'tkinter.messagebox',
         'numpy',
         'numpy.core._methods',
-        'numpy.lib.format'
+        'numpy.lib.format',
+        'requests',
+        'urllib3',
+        'charset_normalizer',
+        'idna',
+        'certifi'
     ],
     hookspath=[],
     hooksconfig={},
@@ -39,7 +44,6 @@ a = Analysis(
         'spire',
         'akshare',
         'beautifulsoup4',
-        'requests',
         'scrapy',
         'moviepy',
         'openai',

@@ -792,8 +792,10 @@ class PPTGeneratorApp:
             full_save_path = os.path.join(save_dir, save_filename)
 
             self.update_progress(10, "读取Excel文件...")
-            # 读取Excel文件，跳过空行
+            # 读取Excel文件，跳过空行，将 NA 值替换为空格
             df = pd.read_excel(self.excel_path.get()).dropna(how='all')
+            # 将所有的 NA 值替换为空格
+            df = df.fillna(' ')
             
             # 打印数据行数信息，用于调试
             print(f"总行数: {len(df)}")
@@ -876,14 +878,20 @@ class PPTGeneratorApp:
                                 
                                 # 直接使用形状名称作为列名查找对应的内容
                                 if shape_name in df.columns:
-                                    content = str(row[shape_name])
+                                    # 确保内容不为空，如果为空则使用空格
+                                    content = str(row[shape_name]).strip()
+                                    if not content or content.lower() == 'nan':
+                                        content = ' '
                                     print(f"匹配到内容: {content}")  # 调试信息
                                     
                                     if "标题" in shape_name and not has_title:
                                         continue
                                     
                                     if "标题" in shape_name and unified_title:
-                                        content = str(df.iloc[0][shape_name]) if i == 0 else shape.TextFrame.TextRange.Text
+                                        first_title = str(df.iloc[0][shape_name]).strip()
+                                        content = first_title if first_title and first_title.lower() != 'nan' else ' '
+                                        if i > 0:
+                                            content = shape.TextFrame.TextRange.Text
                                     
                                     shape.TextFrame.TextRange.Text = content
                         except Exception as shape_error:
