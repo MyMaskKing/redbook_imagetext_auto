@@ -8,6 +8,8 @@ from copy import deepcopy
 from PIL import Image
 import comtypes.client
 import requests
+import win32gui
+import win32con
 
 class ModernButton(tk.Button):
     def __init__(self, master, **kwargs):
@@ -217,28 +219,23 @@ class PPTGeneratorApp:
         # 使用Grid布局
         settings_frame.grid_columnconfigure(1, weight=1)
         
-        # 创建两个容器框架，分别用于标题设置和标题处理
-        title_container = tk.Frame(settings_frame, bg='#FFFFFF')
-        title_container.grid(row=0, column=0, columnspan=2, sticky='ew', pady=(0, 10))
-        
-        process_container = tk.Frame(settings_frame, bg='#FFFFFF')
-        process_container.grid(row=1, column=0, columnspan=2, sticky='ew')
-        
         # 标题设置
         tk.Label(
-            title_container,
+            settings_frame,
             text="标题设置：",
             font=('Microsoft YaHei UI', 10),
             fg='#333333',
             bg='#FFFFFF',
-            width=10,
-            anchor='e'
-        ).pack(side=tk.LEFT, padx=(0, 10))
+            anchor='w'
+        ).grid(row=0, column=0, sticky='w', padx=(0, 10), pady=(0, 10))
 
         # 第一组单选按钮
+        radio_frame1 = tk.Frame(settings_frame, bg='#FFFFFF')
+        radio_frame1.grid(row=0, column=1, sticky='w')
+        
         self.radio_var1 = tk.StringVar(value="option1")
         tk.Radiobutton(
-            title_container,
+            radio_frame1,
             text="包含标题",
             variable=self.radio_var1,
             value="option1",
@@ -247,10 +244,10 @@ class PPTGeneratorApp:
             bg='#FFFFFF',
             activebackground='#FFE4E8',
             selectcolor='#FF4D6D'
-        ).pack(side=tk.LEFT, padx=10)
+        ).pack(side=tk.LEFT, padx=(0, 20))
 
         tk.Radiobutton(
-            title_container,
+            radio_frame1,
             text="只有正文",
             variable=self.radio_var1,
             value="option2",
@@ -259,23 +256,25 @@ class PPTGeneratorApp:
             bg='#FFFFFF',
             activebackground='#FFE4E8',
             selectcolor='#FF4D6D'
-        ).pack(side=tk.LEFT, padx=10)
+        ).pack(side=tk.LEFT)
 
         # 标题处理
         tk.Label(
-            process_container,
+            settings_frame,
             text="标题处理：",
             font=('Microsoft YaHei UI', 10),
             fg='#333333',
             bg='#FFFFFF',
-            width=10,
-            anchor='e'
-        ).pack(side=tk.LEFT, padx=(0, 10))
+            anchor='w'
+        ).grid(row=1, column=0, sticky='w', padx=(0, 10), pady=(0, 10))
 
         # 第二组单选按钮
+        radio_frame2 = tk.Frame(settings_frame, bg='#FFFFFF')
+        radio_frame2.grid(row=1, column=1, sticky='w')
+        
         self.radio_var2 = tk.StringVar(value="option1")
         tk.Radiobutton(
-            process_container,
+            radio_frame2,
             text="每页不同",
             variable=self.radio_var2,
             value="option1",
@@ -284,10 +283,10 @@ class PPTGeneratorApp:
             bg='#FFFFFF',
             activebackground='#FFE4E8',
             selectcolor='#FF4D6D'
-        ).pack(side=tk.LEFT, padx=10)
+        ).pack(side=tk.LEFT, padx=(0, 20))
 
         tk.Radiobutton(
-            process_container,
+            radio_frame2,
             text="统一标题",
             variable=self.radio_var2,
             value="option2",
@@ -296,7 +295,44 @@ class PPTGeneratorApp:
             bg='#FFFFFF',
             activebackground='#FFE4E8',
             selectcolor='#FF4D6D'
-        ).pack(side=tk.LEFT, padx=10)
+        ).pack(side=tk.LEFT)
+
+        # 首图字体大小
+        tk.Label(
+            settings_frame,
+            text="首图字体大小：",
+            font=('Microsoft YaHei UI', 10),
+            fg='#333333',
+            bg='#FFFFFF',
+            anchor='w'
+        ).grid(row=2, column=0, sticky='w', padx=(0, 10), pady=(0, 10))
+        
+        # 创建输入框容器（用于实现更好的边框效果）
+        entry_container = tk.Frame(settings_frame, bg='#E0E0E0', padx=1, pady=1)
+        entry_container.grid(row=2, column=1, sticky='w')
+        
+        # 输入框
+        self.font_size_var = tk.StringVar(value="45")  # 默认值为45
+        self.font_size_entry = tk.Entry(
+            entry_container,
+            textvariable=self.font_size_var,
+            font=('Microsoft YaHei UI', 10),
+            width=5,
+            relief='flat',  # 移除输入框自身的边框
+            justify='center',  # 文字居中显示
+            bg='#FFFFFF'
+        )
+        self.font_size_entry.pack(padx=1, pady=1)
+        
+        # 添加提示说明
+        tip_label = tk.Label(
+            settings_frame,
+            text='提示：内容中包含"#我的首图#"的文本会自动调整为上方设置的字体大小',
+            font=('Microsoft YaHei UI', 9),
+            fg='#666666',
+            bg='#FFFFFF'
+        )
+        tip_label.grid(row=3, column=0, columnspan=2, sticky='w', pady=(10, 0))
 
     def create_scale_frame(self):
         scale_frame = tk.LabelFrame(
@@ -823,10 +859,23 @@ class PPTGeneratorApp:
             total_rows = len(df)
             
             self.update_progress(20, "加载PPT模板...")
-            wps = comtypes.client.CreateObject("KWPP.Application")
-            wps.Visible = True
-            
             try:
+                # 创建 WPS 实例
+                wps = comtypes.client.CreateObject("KWPP.Application")
+                wps.Visible = True  # 需要保持True，否则可能出错
+                
+                # 最小化 WPS 窗口
+                self.root.after(1000)
+                
+                # 查找 WPS 窗口并最小化
+                def callback(hwnd, extra):
+                    if win32gui.IsWindowVisible(hwnd):
+                        title = win32gui.GetWindowText(hwnd)
+                        if 'WPS' in title or 'Presentation' in title:
+                            win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
+                
+                win32gui.EnumWindows(callback, None)
+                
                 # 打开PPT文件
                 ppt = wps.Presentations
                 template = ppt.Open(os.path.abspath(self.ppt_path.get()))
@@ -854,7 +903,7 @@ class PPTGeneratorApp:
                 print(f"- 填充类型: {template_fill.Type}")
                 print(f"- 前景色: {template_fore_color}")
                 print(f"- 背景色: {template_back_color}")
-                
+                old_font_size = None
                 # 遍历Excel的每一行数据（包括第一行）
                 for i in range(len(df)):
                     progress = 20 + (i / total_rows * 40)
@@ -886,31 +935,34 @@ class PPTGeneratorApp:
                     else:
                         # 使用第一页
                         new_slide = template_slide
-
+                    
                     # 遍历所有形状并更新文本内容
                     for shape in new_slide.Shapes:
                         try:
                             if shape.HasTextFrame:
                                 shape_name = shape.Name
-                                print(f"处理形状: {shape_name}")  # 调试信息
+                                print(f"处理形状: {shape_name}")
                                 
-                                # 直接使用形状名称作为列名查找对应的内容
                                 if shape_name in df.columns:
-                                    # 确保内容不为空，如果为空则使用空格
+                                    # 获取内容
                                     content = str(row[shape_name]).strip()
                                     if not content or content.lower() == 'nan':
                                         content = ' '
-                                    print(f"匹配到内容: {content}")  # 调试信息
                                     
-                                    if "标题" in shape_name and not has_title:
-                                        continue
+                                    # 只有当内容包含"我的首图"时才设置字号
+                                    if "#我的首图#" in content:
+                                        print(f"检测到'#我的首图#'，设置字号为{self.font_size_var.get()}")
+                                        old_font_size = shape.TextFrame.TextRange.Font.Size
+                                        shape.TextFrame.TextRange.Font.Size = int(self.font_size_var.get())
+                                        content = content.replace("#我的首图#", "")
+                                        print(f"已设置字号为{self.font_size_var.get()}，内容: {content}")
+                                    else:
+                                        # 其他内容保持原有字号
+                                        if old_font_size is not None:
+                                            shape.TextFrame.TextRange.Font.Size = old_font_size
+                                        print(f"普通内容，保持原有字号: {shape.TextFrame.TextRange.Font.Size}")
                                     
-                                    if "标题" in shape_name and unified_title:
-                                        first_title = str(df.iloc[0][shape_name]).strip()
-                                        content = first_title if first_title and first_title.lower() != 'nan' else ' '
-                                        if i > 0:
-                                            content = shape.TextFrame.TextRange.Text
-                                    
+                                    # 设置文本内容
                                     shape.TextFrame.TextRange.Text = content
                         except Exception as shape_error:
                             print(f"处理形状时出错: {str(shape_error)}")
