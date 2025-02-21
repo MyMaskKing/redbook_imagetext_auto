@@ -904,6 +904,15 @@ class PPTGeneratorApp:
                 print(f"- 前景色: {template_fore_color}")
                 print(f"- 背景色: {template_back_color}")
                 old_font_size = None
+                # 在处理每个形状之前，先保存模板页面的字号信息
+                template_font_sizes = {}
+                for shape in template_slide.Shapes:
+                    try:
+                        if shape.HasTextFrame:
+                            template_font_sizes[shape.Name] = shape.TextFrame.TextRange.Font.Size
+                    except:
+                        continue
+
                 # 遍历Excel的每一行数据（包括第一行）
                 for i in range(len(df)):
                     progress = 20 + (i / total_rows * 40)
@@ -949,18 +958,20 @@ class PPTGeneratorApp:
                                     if not content or content.lower() == 'nan':
                                         content = ' '
                                     
-                                    # 只有当内容包含"我的首图"时才设置字号
+                                    # 从保存的模板中获取原始字号
+                                    original_font_size = template_font_sizes.get(shape_name, shape.TextFrame.TextRange.Font.Size)
+                                    print(f"原始字号: {original_font_size}")
+                                    
+                                    # 只有当内容包含"#我的首图#"时才设置字号
                                     if "#我的首图#" in content:
                                         print(f"检测到'#我的首图#'，设置字号为{self.font_size_var.get()}")
-                                        old_font_size = shape.TextFrame.TextRange.Font.Size
                                         shape.TextFrame.TextRange.Font.Size = int(self.font_size_var.get())
                                         content = content.replace("#我的首图#", "")
                                         print(f"已设置字号为{self.font_size_var.get()}，内容: {content}")
                                     else:
-                                        # 其他内容保持原有字号
-                                        if old_font_size is not None:
-                                            shape.TextFrame.TextRange.Font.Size = old_font_size
-                                        print(f"普通内容，保持原有字号: {shape.TextFrame.TextRange.Font.Size}")
+                                        # 其他内容使用模板中的原始字号
+                                        shape.TextFrame.TextRange.Font.Size = original_font_size
+                                        print(f"普通内容，使用原始字号: {original_font_size}")
                                     
                                     # 设置文本内容
                                     shape.TextFrame.TextRange.Text = content
