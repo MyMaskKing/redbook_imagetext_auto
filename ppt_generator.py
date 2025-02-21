@@ -297,34 +297,64 @@ class PPTGeneratorApp:
             selectcolor='#FF4D6D'
         ).pack(side=tk.LEFT)
 
+        # 创建一个容器来放置首图字体大小和空值替换
+        size_empty_container = tk.Frame(settings_frame, bg='#FFFFFF')
+        size_empty_container.grid(row=2, column=0, columnspan=2, sticky='ew', pady=(0, 10))
+
         # 首图字体大小
         tk.Label(
-            settings_frame,
+            size_empty_container,
             text="首图字体大小：",
             font=('Microsoft YaHei UI', 10),
             fg='#333333',
             bg='#FFFFFF',
             anchor='w'
-        ).grid(row=2, column=0, sticky='w', padx=(0, 10), pady=(0, 10))
-        
-        # 创建输入框容器（用于实现更好的边框效果）
-        entry_container = tk.Frame(settings_frame, bg='#E0E0E0', padx=1, pady=1)
-        entry_container.grid(row=2, column=1, sticky='w')
-        
-        # 输入框
+        ).pack(side=tk.LEFT, padx=(0, 10))
+
+        # 创建首图字体大小输入框容器
+        font_size_entry_container = tk.Frame(size_empty_container, bg='#E0E0E0', padx=1, pady=1)
+        font_size_entry_container.pack(side=tk.LEFT)
+
+        # 首图字体大小输入框
         self.font_size_var = tk.StringVar(value="45")  # 默认值为45
         self.font_size_entry = tk.Entry(
-            entry_container,
+            font_size_entry_container,
             textvariable=self.font_size_var,
             font=('Microsoft YaHei UI', 10),
             width=5,
-            relief='flat',  # 移除输入框自身的边框
-            justify='center',  # 文字居中显示
+            relief='flat',
+            justify='center',
             bg='#FFFFFF'
         )
         self.font_size_entry.pack(padx=1, pady=1)
-        
-        # 添加提示说明
+
+        # 空值替换（在同一行）
+        tk.Label(
+            size_empty_container,
+            text="空值替换：",
+            font=('Microsoft YaHei UI', 10),
+            fg='#333333',
+            bg='#FFFFFF',
+            anchor='w'
+        ).pack(side=tk.LEFT, padx=(20, 10))  # 增加左边距，与前面的输入框分开
+
+        # 创建空值替换输入框容器
+        empty_entry_container = tk.Frame(size_empty_container, bg='#E0E0E0', padx=1, pady=1)
+        empty_entry_container.pack(side=tk.LEFT)
+
+        # 空值替换输入框
+        self.empty_value_var = tk.StringVar(value=" ")  # 默认为空格
+        self.empty_value_entry = tk.Entry(
+            empty_entry_container,
+            textvariable=self.empty_value_var,
+            font=('Microsoft YaHei UI', 10),
+            width=15,
+            relief='flat',
+            bg='#FFFFFF'
+        )
+        self.empty_value_entry.pack(padx=1, pady=1)
+
+        # 提示说明
         tip_label = tk.Label(
             settings_frame,
             text='提示：内容中包含"#我的首图#"的文本会自动调整为上方设置的字体大小',
@@ -956,7 +986,7 @@ class PPTGeneratorApp:
                                     # 获取内容
                                     content = str(row[shape_name]).strip()
                                     if not content or content.lower() == 'nan':
-                                        content = ' '
+                                        content = self.empty_value_var.get()  # 使用用户设置的空值替换
                                     
                                     # 从保存的模板中获取原始字号
                                     original_font_size = template_font_sizes.get(shape_name, shape.TextFrame.TextRange.Font.Size)
