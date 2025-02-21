@@ -338,19 +338,27 @@ class PPTGeneratorApp:
             anchor='w'
         ).pack(side=tk.LEFT, padx=(20, 10))  # 增加左边距，与前面的输入框分开
 
-        # 创建空值替换输入框容器
+        # 创建输入框容器
         empty_entry_container = tk.Frame(size_empty_container, bg='#E0E0E0', padx=1, pady=1)
         empty_entry_container.pack(side=tk.LEFT)
 
-        # 空值替换输入框
-        self.empty_value_var = tk.StringVar(value=" ")  # 默认为空格
-        self.empty_value_entry = tk.Entry(
+        # 设置ttk样式
+        style = ttk.Style()
+        style.configure(
+            'Emoji.TEntry',
+            fieldbackground='#FFFFFF',
+            borderwidth=0,
+            padding=5
+        )
+
+        # 使用ttk.Entry
+        self.empty_value_var = tk.StringVar(value=" ")
+        self.empty_value_entry = ttk.Entry(
             empty_entry_container,
             textvariable=self.empty_value_var,
-            font=('Microsoft YaHei UI', 10),
+            font=('Segoe UI Emoji', 10),  # 使用Emoji字体
             width=15,
-            relief='flat',
-            bg='#FFFFFF'
+            style='Emoji.TEntry'
         )
         self.empty_value_entry.pack(padx=1, pady=1)
 
@@ -986,7 +994,7 @@ class PPTGeneratorApp:
                                     # 获取内容
                                     content = str(row[shape_name]).strip()
                                     if not content or content.lower() == 'nan':
-                                        content = self.empty_value_var.get()  # 使用用户设置的空值替换
+                                        content = self.empty_value_var.get()
                                     
                                     # 从保存的模板中获取原始字号
                                     original_font_size = template_font_sizes.get(shape_name, shape.TextFrame.TextRange.Font.Size)
